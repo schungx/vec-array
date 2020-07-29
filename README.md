@@ -39,4 +39,6 @@ cannot do with a normal array.
 `no-std` Support
 ----------------
 
-Use the `no_std` feature to build for `no-std`.
+The default build includes the `std` feature which links in the standard library.
+
+Set `default_features = false` for `no-std` builds.

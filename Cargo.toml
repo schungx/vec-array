@@ -16,5 +16,5 @@ keywords = [ "Vec", "array" ]
 categories = [ "data-structures", "no-std", "embedded" ]
 
 [features]
-default = []
-no_std = []
+default = [ "std" ]
+std = []

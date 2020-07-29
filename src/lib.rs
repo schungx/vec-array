@@ -47,12 +47,12 @@
 //!    added and removed from the `VecArray` that straddles this threshold, you'll see excessive
 //!    moving and copying of data back-and-forth, plus allocations and deallocations of the `Vec`.
 
-#![cfg_attr(feature = "no_std", no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 extern crate alloc;
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 use std::{
     fmt,
     hash::{Hash, Hasher},
@@ -61,7 +61,7 @@ use std::{
     ops::{Deref, DerefMut, Index, IndexMut},
 };
 
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 use core::{
     fmt,
     hash::{Hash, Hasher},
@@ -70,7 +70,7 @@ use core::{
     ops::{Deref, DerefMut, Index, IndexMut},
 };
 
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec::Vec};
 
 type ArrayStore<T> = [T; MAX_ARRAY_SIZE];
@@ -422,8 +422,8 @@ impl<T> VecArray<T> {
         }
     }
 
-    /// Move all data into another `StaticVec`, overwriting any data there.
-    /// The existing `StaticVec` is empty after this operation.
+    /// Move all data into another `VecArray`, overwriting any data there.
+    /// The existing `VecArray` is empty after this operation.
     pub fn transfer(&mut self, other: &mut Self) {
         other.clear();
 

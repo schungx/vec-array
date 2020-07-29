@@ -1,0 +1,20 @@
+[package]
+name = "vec-array"
+version = "0.1.0"
+edition = "2018"
+authors = ["Stephen Chung"]
+description = "Embedded scripting for Rust"
+homepage = "https://github.com/schungx/vec-array"
+repository = "https://github.com/schungx/vec-array"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+include = [
+    "**/*.rs",
+    "Cargo.toml"
+]
+keywords = [ "Vec", "array" ]
+categories = [ "data-structures", "no-std", "embedded" ]
+
+[features]
+default = []
+no_std = []

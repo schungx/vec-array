@@ -20,7 +20,7 @@
 //!
 //! When `len <= MAX_ARRAY_SIZE`, all elements are stored in the fixed-size array.
 //! Array slots `>= len` are `MaybeUninit::uninit()` while slots `< len` are considered actual data.
-//! In this scenario, the `Vec` (`more`) is empty.
+//! In this scenario, the `Vec` is empty.
 //!
 //! As soon as we try to push a new item into the `VecArray` that makes the total number exceed
 //! `MAX_ARRAY_SIZE`, all the items in the fixed-sized array are taken out, replaced with
@@ -40,7 +40,7 @@
 //! # Limitations
 //!
 //! 1) The constant `MAX_ARRAY_SIZE` must be compiled in, at least until constant generics
-//!    land in Rust.  It defaults to 4, and you must clone this repo and change it to another number.
+//!    land in Rust.  It defaults to 4; to change it, you must clone this repo and modify the code.
 //!
 //! 2) It automatically converts itself into a `Vec` when over `MAX_ARRAY_SIZE` and back into an array
 //!    when the number of items drops below this threshold.  If it so happens that the data is constantly
@@ -72,6 +72,8 @@ use core::{
 
 #[cfg(feature = "no_std")]
 use alloc::{boxed::Box, vec::Vec};
+
+type ArrayStore<T> = [T; MAX_ARRAY_SIZE];
 
 /// An array-like type that holds a number of values in static storage for no-allocation, quick access.
 ///
@@ -131,8 +133,8 @@ impl<T: PartialEq> PartialEq for VecArray<T> {
         }
 
         unsafe {
-            mem::transmute::<_, &[T; MAX_ARRAY_SIZE]>(&self.array_store)
-                == mem::transmute::<_, &[T; MAX_ARRAY_SIZE]>(&other.array_store)
+            mem::transmute::<_, &ArrayStore<T>>(&self.array_store)
+                == mem::transmute::<_, &ArrayStore<T>>(&other.array_store)
         }
     }
 }
@@ -145,7 +147,7 @@ impl<T: Clone> Clone for VecArray<T> {
         if self.is_fixed_storage() {
             for x in 0..self.len {
                 let item = self.array_store.get(x).unwrap();
-                let item_value = unsafe { mem::transmute::<_, &T>(item) };
+                let item_value: &T = unsafe { mem::transmute(item) };
                 value.array_store[x] = MaybeUninit::new(item_value.clone());
             }
         } else {
@@ -189,7 +191,7 @@ impl<T> VecArray<T> {
     pub fn clear(&mut self) {
         if self.is_fixed_storage() {
             for x in 0..self.len {
-                self.extract_from_list(x);
+                self.extract_from_array_store(x);
             }
         } else {
             self.vec_store.clear();
@@ -207,7 +209,7 @@ impl<T> VecArray<T> {
     /// # Panics
     ///
     /// Panics if fixed-size storage is not used, or if the `index` is out of bounds.
-    fn extract_from_list(&mut self, index: usize) -> T {
+    fn extract_from_array_store(&mut self, index: usize) -> T {
         if !self.is_fixed_storage() {
             panic!("not fixed storage in VecArray");
         }
@@ -226,7 +228,7 @@ impl<T> VecArray<T> {
     /// # Panics
     ///
     /// Panics if fixed-size storage is not used, or if the `index` is out of bounds.
-    fn set_into_list(&mut self, index: usize, value: T, drop: bool) {
+    fn set_into_array_store(&mut self, index: usize, value: T, drop: bool) {
         if !self.is_fixed_storage() {
             panic!("not fixed storage in VecArray");
         }
@@ -276,7 +278,7 @@ impl<T> VecArray<T> {
             self.move_fixed_into_vec(MAX_ARRAY_SIZE);
             self.vec_store.push(value.into());
         } else if self.is_fixed_storage() {
-            self.set_into_list(self.len, value.into(), false);
+            self.set_into_array_store(self.len, value.into(), false);
         } else {
             self.vec_store.push(value.into());
         }
@@ -293,10 +295,10 @@ impl<T> VecArray<T> {
         } else if self.is_fixed_storage() {
             // Move all items one slot to the right
             for x in (index..self.len).rev() {
-                let orig_value = self.extract_from_list(x);
-                self.set_into_list(x + 1, orig_value, false);
+                let orig_value = self.extract_from_array_store(x);
+                self.set_into_array_store(x + 1, orig_value, false);
             }
-            self.set_into_list(index, value.into(), false);
+            self.set_into_array_store(index, value.into(), false);
         } else {
             self.vec_store.insert(index, value.into());
         }
@@ -310,18 +312,18 @@ impl<T> VecArray<T> {
         }
 
         Some(if self.is_fixed_storage() {
-            let value = self.extract_from_list(self.len - 1);
+            let value = self.extract_from_array_store(self.len - 1);
             self.len -= 1;
             value
         } else {
             let value = self.vec_store.pop().unwrap();
             self.len -= 1;
 
-            // Move back to the fixed list
+            // Move back to the fixed array
             if self.vec_store.len() == MAX_ARRAY_SIZE {
                 for index in (0..MAX_ARRAY_SIZE).rev() {
                     let item = self.vec_store.pop().unwrap();
-                    self.set_into_list(index, item, false);
+                    self.set_into_array_store(index, item, false);
                 }
             }
 
@@ -336,12 +338,12 @@ impl<T> VecArray<T> {
         }
 
         Some(if self.is_fixed_storage() {
-            let value = self.extract_from_list(index);
+            let value = self.extract_from_array_store(index);
 
             // Move all items one slot to the left
             for x in index + 1..self.len {
-                let orig_value = self.extract_from_list(x);
-                self.set_into_list(x - 1, orig_value, false);
+                let orig_value = self.extract_from_array_store(x);
+                self.set_into_array_store(x - 1, orig_value, false);
             }
             self.len -= 1;
 
@@ -350,11 +352,11 @@ impl<T> VecArray<T> {
             let value = self.vec_store.remove(index);
             self.len -= 1;
 
-            // Move back to the fixed list
+            // Move back to the fixed array
             if self.vec_store.len() == MAX_ARRAY_SIZE {
                 for index in (0..MAX_ARRAY_SIZE).rev() {
                     let item = self.vec_store.pop().unwrap();
-                    self.set_into_list(index, item, false);
+                    self.set_into_array_store(index, item, false);
                 }
             }
 
@@ -378,10 +380,9 @@ impl<T> VecArray<T> {
             return None;
         }
 
-        let list = unsafe { mem::transmute::<_, &[T; MAX_ARRAY_SIZE]>(&self.array_store) };
-
         if self.is_fixed_storage() {
-            list.get(index)
+            let array_store: &ArrayStore<T> = unsafe { mem::transmute(&self.array_store) };
+            array_store.get(index)
         } else {
             self.vec_store.get(index)
         }
@@ -393,10 +394,9 @@ impl<T> VecArray<T> {
             return None;
         }
 
-        let list = unsafe { mem::transmute::<_, &mut [T; MAX_ARRAY_SIZE]>(&mut self.array_store) };
-
         if self.is_fixed_storage() {
-            list.get_mut(index)
+            let array_store: &mut ArrayStore<T> = unsafe { mem::transmute(&mut self.array_store) };
+            array_store.get_mut(index)
         } else {
             self.vec_store.get_mut(index)
         }
@@ -404,10 +404,9 @@ impl<T> VecArray<T> {
 
     /// Get an iterator to entries in the `VecArray`.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        let list = unsafe { mem::transmute::<_, &[T; MAX_ARRAY_SIZE]>(&self.array_store) };
-
         if self.is_fixed_storage() {
-            list[..self.len].iter()
+            let array_store: &ArrayStore<T> = unsafe { mem::transmute(&self.array_store) };
+            array_store[..self.len].iter()
         } else {
             self.vec_store.iter()
         }
@@ -415,13 +414,32 @@ impl<T> VecArray<T> {
 
     /// Get a mutable iterator to entries in the `VecArray`.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        let list = unsafe { mem::transmute::<_, &mut [T; MAX_ARRAY_SIZE]>(&mut self.array_store) };
-
         if self.is_fixed_storage() {
-            list[..self.len].iter_mut()
+            let array_store: &mut ArrayStore<T> = unsafe { mem::transmute(&mut self.array_store) };
+            array_store[..self.len].iter_mut()
         } else {
             self.vec_store.iter_mut()
         }
+    }
+
+    /// Move all data into another `StaticVec`, overwriting any data there.
+    /// The existing `StaticVec` is empty after this operation.
+    pub fn transfer(&mut self, other: &mut Self) {
+        other.clear();
+
+        if self.is_fixed_storage() {
+            let array_store2: &mut ArrayStore<T> =
+                unsafe { mem::transmute(&mut other.array_store) };
+
+            for x in 0..self.len {
+                array_store2[x] = self.extract_from_array_store(x);
+            }
+        } else {
+            other.vec_store = mem::take(&mut self.vec_store);
+        }
+
+        other.len = self.len;
+        self.len = 0;
     }
 }
 
@@ -500,10 +518,9 @@ impl<T: fmt::Debug> fmt::Debug for VecArray<T> {
 
 impl<T> AsRef<[T]> for VecArray<T> {
     fn as_ref(&self) -> &[T] {
-        let list = unsafe { mem::transmute::<_, &[T; MAX_ARRAY_SIZE]>(&self.array_store) };
-
         if self.is_fixed_storage() {
-            &list[..self.len]
+            let array_store: &ArrayStore<T> = unsafe { mem::transmute(&self.array_store) };
+            &array_store[..self.len]
         } else {
             &self.vec_store[..]
         }
@@ -512,10 +529,9 @@ impl<T> AsRef<[T]> for VecArray<T> {
 
 impl<T> AsMut<[T]> for VecArray<T> {
     fn as_mut(&mut self) -> &mut [T] {
-        let list = unsafe { mem::transmute::<_, &mut [T; MAX_ARRAY_SIZE]>(&mut self.array_store) };
-
         if self.is_fixed_storage() {
-            &mut list[..self.len]
+            let array_store: &mut ArrayStore<T> = unsafe { mem::transmute(&mut self.array_store) };
+            &mut array_store[..self.len]
         } else {
             &mut self.vec_store[..]
         }
@@ -569,7 +585,7 @@ impl<T> From<Vec<T>> for VecArray<T> {
 
         if arr.len <= MAX_ARRAY_SIZE {
             for x in (0..arr.len).rev() {
-                arr.set_into_list(x, value.pop().unwrap(), false);
+                arr.set_into_array_store(x, value.pop().unwrap(), false);
             }
         } else {
             arr.vec_store = value;

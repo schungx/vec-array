@@ -1,3 +1,5 @@
+**NOTICE: This project is archived.  It is not very good,  [`smallvec`](https://github.com/servo/rust-smallvec) does the job better.**
+
 `Vec-Array` - Combined Vec/Array Storage
 =======================================
 
